@@ -1,0 +1,592 @@
+= Erstellen von Biegemaschinen
+:imagesdir: img
+
+In diesem Dokument wird erläutert, wie Biegemaschinen für Flux mithilfe einer bmachine.ini Datei erstellt werden
+zur Bereitstellung von Maschinendaten und MetaCAM 3D-Modellen für die Geometrie. Dies basiert lose auf
+auf das Format, das in MetaCAM verwendet wurde (mit der Datei bendmachine.ini), hat aber einige 
+Wesentliche Unterschiede.
+
+- Die Geometrie wird in einer eher _modularen_ Form gespeichert, wobei separate 3D-Modelle verwendet werden
+  für verschiedene Komponenten wie den Rahmen, den Stößel, die Matrizenschiene usw. Das macht es einfacher
+  , um Komponenten zwischen Maschinen derselben Familie gemeinsam zu nutzen. 
+- Es gibt keine externen Dateien (wie die accurpress.ini oder cincinnati.ini usw.). Alle für die Maschine erforderlichen Daten werden in der Datei *bmachine.ini* gespeichert.
+
+
+== Ordnerstruktur
+
+Ausgangspunkt für die Maschinenkonvertierung ist eine *bmachine.ini* Datei. Diese Datei wird zuerst gelesen und enthält Zeiger auf andere Dateien, die die 3D-Modelle der Komponente bereitstellen. Hier sind zum Beispiel ein paar Abschnitte aus einer typischen bmachine.ini Datei, die Modelle für den Träger und das Stanzbett enthält.
+
+[Quelle]
+----
+[Strahl]
+Modell=B23-5130-Druckbalken.sat
+Verschiebung=-1615,0,-120
+
+[DieBed]
+Modell=B23_Tisch_120.geo
+XSpan=-1615,1615
+Verschiebung = 0,0,100
+----
+
+Flux versucht, diese Geometriedatei im selben Ordner zu finden, in dem sich die bmachine.ini Datei befindet. Wenn das nicht funktioniert, sucht es im Ordner _parent_ und sucht weiter nach oben, bis es die Datei finden kann. 
+
+Der Grund dafür ist folgender: Dieses spezielle Rahmenmodell (B23-5130-Druckbalken.sat) könnte von mehreren Trumpf-Maschinen gemeinsam genutzt werden. Anstatt eine Kopie dieser Datei in jedem dieser Maschinenordner zu speichern, könnten wir die Dinge vereinfachen, indem wir sie in einem übergeordneten Ordner speichern. Unten sehen Sie zum Beispiel eine Reihe von Dateien und Ordnern aus dem *Komatsu*-Abkantpressen-Repository. Nehmen wir hier an, dass Namen in Großbuchstaben Ordner und Namen in Kleinbuchstaben Dateien sind.
+
+[source]
+----
+C:\
+   KOMATSU
+      komatsu.png
+      PAS-SERIES
+         frame-2005.3d
+         base-2005.3d
+         PAS5020
+            bmachine.ini
+         PAS5012
+            bmachine.ini
+      PVS-SERIES
+         ...
+----
+In this figure you can see that the frame-2005.3d is placed in a folder where it can be shared by both the PAS5020 and PAS5012 machines. And the *komatsu.png* file is placed even higher, and could be shared by PAS-SERIES machines and PVS-SERIES machines.
+
+You can use this search mechanism to easily ensure that you never need to have two copies of any file. Files that can be shared in this way are 3D files, PNG files (for decals), and other INI files like the material maps or tool maps.
+
+== Non-geometry Sections
+The BMachine.ini file contains several mandatory sections (and some optional ones, depending on whether the machine has clamps, whether the back-gauge system is modeled etc).
+
+=== The MacData section
+This is a mandatory section that provides basic machine data. Here's an annotated example:
+
+[source]
+----
+[MacData]
+ID=120300                    ; the Flux machine ID
+Brand=TruBend                ; machine brand / manufacturer
+Name=1066 2A Wila            ; machine name (this is the short name that appears in machine selector)
+NCName=TruBend 1066_B22      ; machine name to use in NC code (optional)
+Wibu=TRUBEND_5130_B23        ; machine package to use for WIBU licensing
+OpenHeight=385               ; open height of the machine, in mm
+ClosedHeight=170             ; closed-height of the machine, in mm
+TableLength=3230             ; table length, in mm 
+NCXCenter=1615               ; NC ordinate at center of the machine table (optional)
+Tonnage=1300                 ; press force, in kN
+MinTonnageFactor=0.04        ; minimum machine tonnage, as a factor of maximum tonnage (optional)
+PunchValency=PTrumpf         ; beam valency (as MetaCAM integer ID, or Flux name)
+DieValency=DTrumpf           ; die-rail valency (as MetaCAM integer ID, or Flux name)
+ToolMap=std-tools            ; Pointer to the tool map (if needed for this machine)
+DontAutoFlipTool=0           ; Don't flip tools while doing auto tool when the value is set to 1
+----
+
+- The punch valency and die valency can both be provided as Flux names, or as MetaCAM integer Ids. See the appendices at the end of this document for details on the valency names.
+- The *[Materials]* section contains the material mapping for this machine.
+  Here is how a MaterialMap might look
+  
+[source]
+----
+[Materials]
+ALUM=1
+A5052P=1
+SPC=2
+SECC=2
+SUS304=5
+...
+----
+
+For some machines (like Trumpf B23 machines), the MaterialMap is even simpler, and is really just a list of materials the machine knows about (there is no _mapping_). Here's the material map for a typical Trumpf machine
+
+[source]
+----
+[Materials]
+Names = St37, 1.4301, AlMg3,
+----
+
+- The ToolMap entry is an INI file containing mapping tools to codes used by the controller. Note that the *.ini* extension is implied, and does not need to be specified in the ToolMap key. Likewise the ToolMap is the INI file. These files are searched for using the same search algorithm explained in the *Folder Structure* section above.
+
+Here's how a ToolMap file might look
+[source]
+----
+[ToolID]
+AMD-004=64
+GN028A=1
+PHA-3=1
+1VHC=5
+DHB=2
+...
+----
+
+Like the material mapping, tool mapping can also be done in the *[ToolMap]* section like this
+[source]
+----
+[ToolMap]
+AMD-004=64
+GN028A=1
+PHA-3=1
+1VHC=5
+DHB=2
+...
+----
+
+=== The NCCode section
+This section is quite simple, and contains the NC code type and the extension used in the code.
+[source]
+----
+[NCCode]
+Type=Jupidu
+Extension=jupidu
+ControlType=B23            ; NC-control type (optional, except for Trumpf machines)
+----
+
+The *Type* value contains either an NC code type name, or an integer code as used in MetaCAM's bendmachine.ini files. For B23 machines, always set the Type to Jupidu, and then Flux will use either Jupidu or BNC depending on whether the Jupidu option switch is set in the Flux installation.
+
+=== The ACB section
+This section is present if the machine has ACB classic or ACB wireless as an option, and it provides some basic information about the ACB system
+
+[source]
+----
+[ACB]
+MinDistBetween=640                  ; minimum distance between 2 ACB sensors
+MinDistToCrowning=350               ; minimum distance between angle sensor and crowning sensor
+MaxDistCrowningToCenter=300         ; maximum distance crowning sensor to table-center
+MaxDiskMeasures=2                   ; max measurements per bend
+----
+
+=== The Extra section
+The values in this section are all copied to the machine's *Extra* dictionary. The exact set of values that are needed here depends on the post (NC code type) for the machine. All the values here are treated as strings. Here's an extract from the *Extra* section for a Komatsu machine.
+
+[source]
+----
+[Extra]
+DieMinWidth=50
+DieWidthPitch=10
+BackStopWidth=60
+BackStopThickness=13
+BackStopDepth=50
+MachineName=PAS5020
+PunchHolder=PHB-3
+BGDeltaY=0
+PHB-3=0,100,-6.5,0
+PHG-B=0,148,-6.5,0
+...
+----
+
+For many Trumpf machines, the [Extra] section is much simpler, and looks like this
+
+[source]
+----
+[Extra]
+LeftBGName=SixAxis_B03_Default_Left
+RightBGName=SixAxis_B03_Default_Right
+----
+
+=== The ExtraFiles section
+This contains the template file name that has to be used by the post for the machine. This file is searched by using the same search algorithm explained in the *Folder Structure* section above. Here's an extract from the *ExtraFiles* section for a Dener machine
+
+[source]
+----
+[ExtraFiles]
+Template=template.dld
+----
+
+=== The Settings section
+The settings section looks like this, and contains various speeds, and other default-overrides
+
+[source]
+----
+[Settings]
+BGXSpeed=1000
+BGY1Speed=1000
+BGY2Speed=1000
+BGZ1Speed=330
+BGZ2Speed=330
+----
+
+The settings here get saved to a *settings.curl* file in the machine output folder. Here is an example of a settings.curl file that contains all the _possible_ settings that can be set using this section.
+The values below are the defaults for all machines, and you only need to specify the settings that are different from these defaults.
+
+[source, curl, options=nowrap]
+----
+(FluxSettings){ 
+  Bend:{ 
+    OpDefault:{ 
+      RamVClosing:200  RamZSafety:6  RamVPinch:10  RamPinchCorrect:0  RamPinchDelay:0  
+      RamVBend:5  RamBendDelay:0.1  RamVDecompress:10  RamZDecompress:0.5  
+      RamZRelease:15  HemMutePoint:20  RamVOpen:200  RamZOpen:100  RamMinZOpen:10  
+      AngleCorrection:0  MinAirgap:50  BGXSpeed:1000  BGY1Speed:1000  BGY2Speed:1000  
+      BGZ1Speed:330  BGZ2Speed:330  BGTransitionDelay:0  BendToolShorterBy:5  
+    }
+  }
+}
+----
+
+=== The Options section
+This section looks like this and the ACB options are set to 0 or 1 depending on whether that is supported by this machine. Also the relevant ACB data should be present in *ACB* section or *ACBLaserF* etc.
+
+[source]
+----
+[Options]
+ACBClassic=1                        ; sensor disk based ACB
+ACBWireLess=1                       ; wireless ACB
+ACBLaser=0                          ; laser ACB
+----
+
+== Geometry Conventions
+There is some basic machine geometry required for all machines. The image below shows these basic components. These, in addition to the back-gauge geometry is all that is required to get a minimal machine working. In practice, there are often additional geometry sections (like bend-guards). These four components shown below are modeled as separate 3D models (or they could also be modeled as _extrusions_, specified with a 2D geometry and an extrusion length):
+
+image::bmcbasicmodel.png[Basic machine models, width=60%]
+
+Here are some notes on the origin points:
+
+- The *dierail* is drawn so that the origin point lies exactly in the center, and where the zero-position of a die would be. The *base* and *frame* are drawn in the same reference coordinates so that if these three models are just _glued_ together they will connect correctly without any gaps. 
+- The *ram* is drawn so that the origin lies exactly at the center of the mounting rail. This is different from the way it is often drawn with MetaCAM bendmachine.3d files, so take care with this. A quick check is this: if you paste the ram model into the dierail model, they should both be touching exactly with their mounting surfaces (in other words, the closed-height should be zero). 
+- If the machine has a clamping system, the *ram* is drawn so that the bottom center of the ram is lifted to the clamp height from the origin. In other words, in this case the Z-origin of the ram model is where the top of the clamps will get mounted.
+
+=== Using MetaCAM 3D models
+Especially when migrating machines from MetaCAM, it is common to represent geometry using MetaCAM 3D models. The notes below are relevant if you are using MetaCAM 3D models.
+
+==== Layer conventions[[Layer_Conventions]]
+When drawing all these 3D models, try to minimize the number of layers used. The only reason to use multiple layers is if the component has multiple colors. As such, it is only necessary to have as many layers as there are colors. Unlike with the bendmachine.3d files, the actual layers names are not important, and you can use any names that you like. For example, you could use layers names that
+like White, Gray, Blue to make the layering more clear.
+
+==== Decals on geometry
+We try to represent logos, machine model numbers etc with _decals_, which are just bitmaps that are painted on top of the model like a texture. This uses far less graphics resources, and you can use as many colors as needed in these decals. Since MetaCAM does not have a way to actually paste a decal into a model, we use a simple convention.
+
+At the position where a decal is required, just draw a simple rectangular plane, and use a special layer name to tell Flux that this is just a place-holder for a decal. The plane should be drawn in a layer whose name looks like *Decal:komatsu* or *Decal:maxform-9*. The part after the colon is the filename of the PNG file that contains the image for the decal, and Flux will search for
+this decal file using the standard rules explained above. The position and size of the rectangular plane will determine where the decal will appear and how big it will be (the actual rectangular plane will be removed, so the color of this plane is not important).
+
+Here are some additional notes:
+
+* For best results, make sure that the _aspect ratio_ of the decal placeholder you draw matches the aspect ratio of the decal PNG file you are using. For example, if the PNG file is 1500x400 pixels in size, make sure the plane has an aspect ratio of 15:4. 
+* Create the decal PNG file with a transparent background. Do not try to match the color of the underlying geometry, there will always be subtle differences. (This is also the reason that only PNG files are used for decals).
+* Draw the Decal placeholder plane 3mm in front of the actual geometry it is supposed to be painted on. If you draw it exactly on the geometry the decal will not render properly (it may get clipped to the background behind the geometry). 
+* A machine can contain only 3 decals. The decals can be pasted on the frame, the base, the ram or to any geometry. If a decal is painted on the ram, it will automatically move with the ram.
+
+The image above show two decal placeholders on the ram (the yellow rectangles). When the machine is rendered in Flux these are replaced with the actual PNG images, as the image below shows.
+
+image::bmcdecals.png[Decal rendered on an LVD machine, width=60%]
+
+=== Using SAT/IGES files for Geometry
+Geometry can also be supplied using SAT/IGES or any other 3D file format that Flux can read. This is the common practice when creating Trumpf machines, since there usually exist SAT files providing the geometry. Very often, this geometry does not have the correct coordinate system as required for this process, so one can use a *Shift* vector to move the geometry. For example:
+
+[source]
+----
+[Beam]
+Model=B23_5130_Druckbalken.sat
+Shift=-1615,0,-120
+----
+
+Most often, you will find that the Trumpf beam models have to be shifted like this: the -1615 represents half the table length, and the -120 represents the reference punch height used in the Trumpf machine models. 
+
+It is possible to _compose_ a component using multiple separate models, and one can also apply _decals_ on top of models. Both of those are described here
+
+[source]
+----
+[Frame]
+Model=B23_5130_Zylinderabdeckung.sat
+Shift=-1615,0,100
+Model2=IAxisDrive.mesh
+Shift2=-1459.5,0,-20
+Model3=IAxisDrive.mesh
+Shift3=1459.5,0,-20
+Decal=TruBend5130.png
+DecalPos=-795,-137,995
+DecalScale=0.5
+----
+
+In this particular example, the frame is described using 3 separate 3D models (each with its own different shift vector), and there is finally a decal pasted on the model.
+
+=== Using Extruded Geometry
+Also very common (in the Trumpf world) is to specify geometry using an extrusion of a 2D cross-section. The extrusions is always in the X direction, and the 2D geometry is specified using a GEO or DXF file.
+
+[source]
+----
+[DieBed]
+Model=B23_Tisch_120.geo
+XSpan=-1615,1615
+Shift=0,0,100
+----
+
+The example above is typical of the shift required to position the die correctly, because Trumpf die-rail drawings are usually drawn with a reference point that is 100mm above the mounting point on the rail (100 is the _reference_ die height). The *XSpan* value indicates that the die is extruded 1615 mm on either side of the center-line. 
+
+== Geometry Sections
+The conventions for providing geometry listed above are used to actually provide the machine geometry, and we list those geometry sections below. 
+
+=== Core Geometry
+These are the geometry sections that are mandatory for every machine.
+
+==== The Frame section
+The mandatory *Frame* section provides the geometry for the machine frame. Here is a typical example from a Trumpf machine
+
+[source]
+----
+[Frame]
+Model=B23_5130_Zylinderabdeckung.sat
+Shift=-1615,0,100
+----
+
+==== The Beam section
+The mandatory *Beam* section provides the geometry for the press-beam. The beam should be drawn so that the center-point of the mounting surface is at 0,0,0. (Alternatively, one can use a shift vector to shift the geometry so it aligns to this constraint). For example
+
+[source]
+----
+[Beam]
+Model=B23_5130_Druckbalken.sat
+Shift=-1615,0,-120
+----
+
+==== The DieBed and DieRail sections
+These sections describe the geometry of the die-bed (table) and the die-rail. The reason they are separated is that for many machines the die-rail can move forward or backward in the Y direction using the I-Axis drive. Here are examples from a Trumpf machine
+
+[source]
+----
+[DieBed]
+Model=B23_Tisch_120.geo
+XSpan=-1615,1615
+Shift=0,0,100
+
+[DieRail]
+Model=B23_UW_Klem_105mm.geo
+XSpan=-1615,1615
+Shift=0,0,100
+----
+
+=== Optional Geometry
+These sections provide optional geometry elements that may or may not be present for a given machine.
+
+==== The Clamp section
+This section is present only if the machine has clamps. Flux will get the geometry
+from *clamp-komatsu.3d* model to get the 3D model of the clamp, the _count_ of how many clamps exist and the rest of the clamp data from this section. Here's how that file could look
+
+[source]
+----
+[Clamp]
+Count=11
+Model=clamp-komatsu.3d
+MinPitch=160
+Pitch=180
+Shift=0,0,350
+----
+
+The clamp 3D model contains only one clamp, and is drawn with the origin aligned to the left-edge of the clamp, with Z at the _bottom_ (where the punch would be mounted). Use a *Shift* vector to shift the geometry so it lifts up to the Z of the ram model (usually the Z of shift vector is the *OpenHeight*).
+Here's an example, where the blue marker indicates where the origin would lie.
+
+image::bmcclamporigin.png[Clamp model origin, width=40%]
+
+Note 1: The clamp model is often repeated several times in the machine. As such, it is worth spending some time to make sure this model is as _lightweight_ as possible (as few surfaces as possible).
+
+Note 2: The INI file does not provide the X-position of the first clamp. This is not required; Flux will figure it out automatically on the assumption that the set of all clamps is centered in the machine. 
+
+==== ACB Laser sections
+If the machine has ACB-Laser (or LCB), these sections are used to provide the geometry for the sensors and the rail
+
+[source]
+----
+
+[ACBLaserF]
+Model=SensorF.mesh              ; model used for LCB front sensor
+Stroke=-1810,1653               ; stroke in X direction
+Shift=192.7,0,100               ; shift-vector to position model at X=0 laser position
+
+[ACBLaserR]
+Model=SensorB.mesh              ; model used for LCB rear sensor
+Stroke=-1810,1653
+Shift=192.7,0,100
+
+[ACBLaserRail]                 
+Model=ACBLaserRail.mesh2        ; model used for the rail on which the sensors move
+Shift=-2210,0,100
+----
+
+==== Bendguard section
+If the machine has a laser-safety system, this section is used
+
+[source]
+----
+[BendGuard]
+BeamWidth=74                            ; laser beam-width (used for BoxHeight calculation)
+Model=B23_5130_BendGuard_Links.sat      ; left bend-guard emitter model
+Shift=-1615,0,-120                      ; shift to align this (assuming punch height = 0)
+Model2=B23_5130_BendGuard_Rechts.sat    ; right bend-guard collector model
+Shift2=1615,0,-120
+
+[BendGuardCover]
+Model=BendGuardCover-L.sat
+Shift=-1615,0,-120
+Model2=BendGuardCover-R.sat
+Shift2=1615,0,-120
+----
+
+== Back-gauge information[[Bg_info]]
+The back-gauges are a bit complex, since a complete machine definition can also include the _mechanisms_ that move the gauge fingers. Also, this section has to describe the gauging _geometry_, in terms of the flat and clamping type gauging surfaces for each gauge. The gauge information is provided in several sections.
+
+=== The BGSystem section
+We start with the *BGSystem* section that defines some basics (remember
+that X,Y,Z in this discussion refers to the Flux coordinate system)
+
+[source]
+----
+[BGSystem]
+Count=2                              ; Count of gauges
+MinXSpacing=190                      ; Minimum spacing between gauges
+LockedYZ=0                           ; if set, gauges move together in Y and Z
+MaxYDifference=9999                  ; if set, defines maximum gap between Y1 and Y2
+ManualX=0                            ; if set, then this is a 2-axis gauging system
+Model=B23_An6_LaufHinten.geo         ; gauge-system rails (optional)
+Shift=0,65.9,100
+XSpan=-1350,1350
+Model2=B23_An6_LaufVorne.geo
+Shift2=0,65.9,100
+XSpan2=-1350,1350
+Mechanism=XZY                        ;The order in which bg mechanism moves. Default is XYZ for 6 axis and for others it is YZX
+----
+
+* Setting LockedYZ=1 makes this effectively a 2,4 or 5 axis gauging system. If MaxYDifference is to a non-zero value it means that Y2 can move a bit relative to Y1 (and this is a 5-axis gauging system). If ManualX is set to 1, then it means that the gauges can be moved in X only manually (by the operator), and this is a 2-axis gauging system.
+* If LockedYZ=0, then this is a 6-axis gauging system and MaxYDifference is ignored.
+* The *Model*, *Model2* etc entries above provide the geometry for the gauge-system rails. These are merely a cosmetic detail and can be omitted (they are not used for collision checks).
+* Mechanism tells the order in which BG carriers moves. XZY mean moving X carrier will move both Z and Y carriers along with X. Moving Z moves Y and moving Y moves the backgauge model.
+
+=== The BG1, BG2, sections
+Sections like BG1, BG2 etc define the set of gauging surfaces for each of the gauges. These sections must also provide a model, and that model should be drawn so that the origin is at the 0,0,0 reference point of the gauge. All the measurements in this section are relative to that origin point. Here is an example of a gauge definition for a Trumpf 6-axis gauge
+
+[source]
+----
+[BG1]
+Model=AnLiNeu.sat
+Stroke=-1235,1235, 3,600, -50,200
+SurfaceCount=5
+S0Type=Flat
+S0Params=0,8, 26,0, 52
+S0Support=0
+S1Type=Flat
+S1Support=1
+S1Params=8,25, 15.5,30, 31
+S2Type=Flat
+S2Support=1
+S2Params=25,49, 39.5,260, 79
+S3Type=Finger
+S3Support=0
+S3Params=0,8, 52,8,8,-90,60, 82,24,8,-150,0
+S4Type=Finger
+S4Support=1
+S4Params=8,25, 31,38,8,-90,60, 71,54,8,-150,0
+----
+
+* The *Stroke* is a set of 6 numbers X1,X2, Y1,Y2 and Z1,Z2 that define the range of movement of the gauge in the X,Y and Z directions. These limits refer to the cuboid within which the _reference point_ of the gauge can move. In addition to this stroke, the gauge movement is also constrained by the *MinXSpacing* value from the *BGSystem* section, so Flux will prevent the gauges from getting too close to each other.
+* The surfaces of the gauges are numbered from 0 .. SurfaceCount-1, and for each surface, there is a surface type (flat or finger), defined by a set of parameters (see below). The values like S0Support, S1Support etc are set to 0 or 1 depending on whether that particular surface is a _supporting_ surface (meaning the part is laid on the gauge if that surface is used for gauging).
+
+=== Surface definitions
+There are several different types of _gauging surfaces_ that can appear in the BGn section. In the example above, there are 5 surfaces; the first 3 are _Flat_ and the next 2 are _Finger_. For each different type of surface definition, there is a different set of _parameters_ that you can see in the values like S0Params, S1Params etc. 
+
+==== S_n_Type=Flat
+A flat-type surface is defined using 5 parameters as shown below
+
+[source]
+----
+S1Params=8,25, 15.5,30, 31
+----
+
+These 5 numbers are *Zmin*,*Zmax*, *Xcen*,*Y*, *Dx*, with the following meanings:
+
+* *Zmin*, *Zmax* define the limits of the surface in the Z axis, relative to the reference point of the gauge. In this example, the surface stretches from Z=8 to Z=25.
+* *Xcen*, *Y* define the X and Y coordinates of the center-point of the gauging surface, relative to the reference point. In this example, the gauge surface is 30mm behind the reference point in Y
+* *Dx* is the width of the gauging surface in X. Taken in conjunction with Xcen, you can also see that in this example, the gauging surface stretches from X=0 to X=31 in this example (Xcen - Dx/2 .. Xcen + Dx/2)
+
+==== S_n_Type=1
+This is very similar to the _Flat_ surface type, except that the parameters are specified slightly differently. This is mainly for compatibility reasons with older MetaCAM bendmachine.ini files
+
+[source]
+----
+S1Params=8,25, 30, 0,31
+----
+
+The 5 numbers here are *Zmin*,*Zmax*, *Y*, *Xmin*,*Xmax*. Instead of specifying the surface limit in X as XCen and Dx, the surface is specified using Xmin and Xmax. 
+
+==== S_n_Type=Finger
+This defines a _finger_ type gauging (which uses 2 cylindrical surfaces). There are more parameters for this type
+
+[source]
+----
+S3Params=0,8, 52,8,8,-90,60, 82,24,8,-150,0
+----
+
+The values here are *Zmin*,*ZMax*, *Xcen1*,*Ycen1*,*R1*,*Sang1*,*Eang1*, 
+*Xcen2*,*Ycen2*,*R2*,*Sang2*,*Eang2* with the following meanings:
+
+* *Zmin*, *Zmax* define the extents of the cylindrical surface in Z (the bottom and top Z of the cylindrical surface).
+* *Xcen1*, *Ycen1* define the center point of the first cylinder in the top view (see image below).
+* *R1* is the radius of the first cylinder * *Sang1*, *Eang1* are the start and end angles of the gauging surface, going CCW around the center with East = 0 (see image)
+* *Xcen2*, *Ycen2*, *R2*, *Sang2*, *Eang2* are the corresponding values for the second cylindrical surface.
+
+This image should make these values more clear:
+
+image:bmcfingerparams.png[Finger type parameters, width=60%]
+
+==== S_n_Type=2
+This is also a finger gauging definition, with exactly the same 12 parameters as above. It is maintained for compatibility with MetaCAM. 
+
+=== Back-gauge carriers
+It is possible to model the back-gauge _carriers_  that support and move the gauges. This is not found for most of the MetaCAM bend machines, but we have this for all the Trumpf machines. Different gauging systems will require slightly different approaches here. 
+
+==== 6-axis back-gauge system
+For a 6-axis BG system, you must prepare 6 models containing the moving parts for the X, Y and Z axes of each of the gauges. 
+
+image:bmcbgsystem.png[BG System Components, width=60%]
+
+The image above shows the three models you need to draw for the left gauge - they are the ones labelled XAxis0, YAxis0 and ZAxis0. These are all shown together as one model here, but they are to be saved as separate 3D models, and of course the gauge model that is shown here in yellow is not part of this set of _carriers_ models.
+
+To get these pieces in the correct location that Flux expects, position the entire system so that the gauge reference point is at the origin. This might mean moving the various components in X Y and Z until the gauge reaches this position. The model at this point should look _correctly composed_ as shown in the image above. Then, split up the components and save the three axis drives separately. The gauge model can now be deleted (since it is already part of a gauge.3d file).
+
+Then, INI sections like these are added to introduce these models to Flux. This example below is from a Trumpf 6-axis machine
+
+[source]
+----
+[BG1X]
+Model=B23_An6_XAchs.geo
+Shift=0,65.9,100
+XSpan=-88,88
+[BG2X]
+Model=B23_An6_XAchs.geo
+Shift=0,65.9,100
+XSpan=-88,88
+
+[BG1Y]
+Model=an6_YAchsNeu.geo
+Shift=0,229.9,100
+XSpan=-90,90
+[BG2Y]
+Model=an6_YAchsNeu.geo
+Shift=0,229.9,100
+XSpan=-90,90
+
+[BG1Z]
+Model=an6_ZAchsNeu.geo
+Shift=0,229.9,0
+XSpan=-88,88
+[BG2Z]
+Model=an6_ZAchsNeu.geo
+Shift=0,229.9,0
+XSpan=-88,88
+----
+
+== Importing a BendMachine into Flux
+Machines are imported from the bmachine.ini format. In Flux application you can import machines using these steps:
+
+*  To import a machine, create an FXCMD file like this and invoke flux.exe with this FXCMD file as parameter.
+
+[source]
+----
+  [Header]
+  Type=FluxCommandFile
+  
+  [Command]
+  Type=ImportBendMC
+  InputFolder=W:\BMC\1001
+----
+
+* The *bmachine.ini* file containing the machine definition and the required geometry files should be in the input folder. The machine will then be imported and will also be set as the default bend machine.
+* Note that you should use bend machine IDs between 1001 and 1999 only. This range of IDs is reserved for _test_ machines that are being created outside of Metamation. Once the machine is created and tested, you can send the data file to Metamation and it will become an official machine with a proper ID.
+* Note that Flux will automatically create the machine in {Data}/Machine/{N} folder, where {Data} is your Flux data folder and {N} is the machine ID. If this folder already exists, the command will fail (to avoid overwriting data, so you have to delete that folder before running this).
+* These test machines are not meant to be shipped to customers - in fact, a warning like this is displayed whenever the machine is used.
+
+image:bmctestmachine.png[Test Machine, width=80%]
+
+It is likely these FXCMD will be removed later, and replaced with API functions to import/export machines, since these are not likely to be used by end-users.
