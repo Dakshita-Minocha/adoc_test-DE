@@ -521,10 +521,10 @@ This image should make these values more clear:
 image:bmcfingerparams.png[Finger type parameters, width=60%]
 
 ==== S_n_Type=2
-This is also a finger gauging definition, with exactly the same 12 parameters as above. It is maintained for compatibility with MetaCAM. 
+Dies ist die gleiche Fingermessdefinition mit genau den gleichen Parametern wie oben, die aus Kompatibilitätsgründen mit MetaCAM beibehalten wurde.
 
-=== Back-gauge carriers
-It is possible to model the back-gauge _carriers_  that support and move the gauges. This is not found for most of the MetaCAM bend machines, but we have this for all the Trumpf machines. Different gauging systems will require slightly different approaches here. 
+=== Hinteranschlagträger
+Es ist möglich, die Hinteranschlagträger zu modellieren, die die Messgeräte stützen und bewegen. Dies ist bei den meisten MetaCAM-Biegemaschinen nicht verfügbar, aber wir haben dies bei allen Trumpf-Maschinen. Unterschiedliche Messsysteme erfordern hier leicht unterschiedliche Ansätze.
 
 ==== 6-axis back-gauge system
 For a 6-axis BG system, you must prepare 6 models containing the moving parts for the X, Y and Z axes of each of the gauges. 
