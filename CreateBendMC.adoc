@@ -524,7 +524,7 @@ image:bmcfingerparams.png[Finger type parameters, width=60%]
 Dies ist die gleiche Fingermessdefinition mit genau den gleichen Parametern wie oben, die aus Kompatibilitätsgründen mit MetaCAM beibehalten wurde.
 
 === Hinteranschlagträger
-Es ist möglich, die Hinteranschlagträger zu modellieren, die die Messgeräte stützen und bewegen. Dies ist bei den meisten MetaCAM-Biegemaschinen nicht verfügbar, aber wir haben dies bei allen Trumpf-Maschinen. Unterschiedliche Messsysteme erfordern hier leicht unterschiedliche Ansätze.
+Dies ist ebenfalls eine Fingermessdefinition mit genau denselben 12 Parametern wie oben. Sie wird aus Kompatibilitätsgründen mit MetaCAM beibehalten.
 
 ==== 6-axis back-gauge system
 For a 6-axis BG system, you must prepare 6 models containing the moving parts for the X, Y and Z axes of each of the gauges. 
